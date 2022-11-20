@@ -22,7 +22,7 @@ class DataContainerBase {
     public:
         DataContainerBase(uint16_t const& capacity) : capacity_(capacity) {}
         virtual ~DataContainerBase() {
-            std::cout << "~DataContainerBase()" <<std::endl;
+            // std::cout << "~DataContainerBase()" <<std::endl;
         }
         virtual inline std::type_index GetDataType() const = 0; 
         virtual inline uint16_t GetDataSize() const = 0; 
@@ -47,7 +47,8 @@ class DataContainerImpl : public DataContainerBase {
         : DataContainerBase(capacity), p_callback_wrapper_(p_callback_wrapper), type_info_(typeid(_DataT)) {}    // typeid 不区分const和&  也就是 const int& 和 int 是一样的
         
         ~DataContainerImpl() {
-            std::cout << "~DataContainerImpl()" <<std::endl;
+            // std::cout << "~DataContainerImpl()" <<std::endl;
+            delete p_callback_wrapper_;  
         }
 
         /**
@@ -89,11 +90,11 @@ class DataContainerImpl : public DataContainerBase {
          * @param[out] data 读取结果
          * @param[in] index  位于队列上的序号
          */            
-        inline _DataT GetData(const int& index) {
-            // std::cout << " index : " << index << std::endl;
-            // std::cout << "GetData" << data_buffer_[index] << std::endl;
-            return data_buffer_[index];  
-        }
+        // inline _DataT GetData(const int& index) {
+        //     // std::cout << " index : " << index << std::endl;
+        //     // std::cout << "GetData" << data_buffer_[index] << std::endl;
+        //     return data_buffer_[index];  
+        // }
 
         /**
          * @brief: 删除数据
@@ -162,9 +163,8 @@ class Subscriber {
         }
 
         virtual ~Subscriber() {
-            std::cout << "~Subscriber" <<std::endl;
+            // std::cout << "~Subscriber" <<std::endl;
             delete data_cache_; 
-            delete p_callback_wrapper_;   
         }
 
         /**
@@ -172,16 +172,16 @@ class Subscriber {
          * @details 直接读取缓存区 最后的数据  然后将最后的数据丢弃 
          * @return 是否读取到新的数据 
          */        
-        template<typename _DataT>
-        bool ReadData(_DataT& data) {
-            DataContainerImpl<_DataT>* data_container_ptr =  
-                dynamic_cast<DataContainerImpl<_DataT>*>(data_cache_);
-            if (data_container_ptr->GetDataSize() == 0) return false; 
-            data = std::move(data_container_ptr->GetData(0));
-            data_container_ptr->DeleteFrontData();
-            // 直接返回
-            return true;  
-        }
+        // template<typename _DataT>
+        // bool ReadData(_DataT& data) {
+        //     DataContainerImpl<_DataT>* data_container_ptr =  
+        //         dynamic_cast<DataContainerImpl<_DataT>*>(data_cache_);
+        //     if (data_container_ptr->GetDataSize() == 0) return false; 
+        //     data = std::move(data_container_ptr->GetData(0));
+        //     data_container_ptr->DeleteFrontData();
+        //     // 直接返回
+        //     return true;  
+        // }
 
     private:
         bool callback() {
@@ -202,7 +202,6 @@ class Subscriber {
         }
 
         friend class DataDispatcher; 
-        FunctionBase* p_callback_wrapper_; 
         DataContainerBase* data_cache_;   // 数据缓存 
 };
 
@@ -218,6 +217,14 @@ class DataDispatcher {
         static DataDispatcher& GetInstance() {
             static DataDispatcher data_dispatcher;
             return data_dispatcher; 
+        }
+
+        virtual ~DataDispatcher() {
+            for (const auto& name_set : subscriber_container_) {
+                for (const auto& pt : name_set.second) {
+                    delete pt;  
+                }
+            }
         }
         
         /**
@@ -272,7 +279,9 @@ class DataDispatcher {
                 for (const auto& pt : subscriber_container_[name]) {
                     pt->addData(std::forward<_T>(data));     // addData是线程安全的
                 }
+                active_data_container_m_.lock();
                 active_data_container_[name] = true;  
+                active_data_container_m_.unlock();  
                 // std::cout << "active_data_container_ name: " << name << "=true" << std::endl;
                 con_.notify_one();  
             }
@@ -290,10 +299,9 @@ class DataDispatcher {
         void process() {
             while (true) {
                 std::unique_lock<std::mutex> lock_m(data_m_);
-                con_.wait(lock_m,[&]
-                 {
+                con_.wait(lock_m,[&] {
                     return active_data_container_.size() > 0;
-                 });
+                });
                 // 遍历每一个有新数据的容器
                 for (const auto& obj : active_data_container_) {
                     // 遍历该容器的全部订阅者
@@ -317,6 +325,7 @@ class DataDispatcher {
         std::mutex data_m_; 
         std::mutex data_container_m_; 
         std::mutex substriber_container_m_; 
+        std::mutex active_data_container_m_;  
         std::condition_variable con_;   
         std::thread callback_thread_;   
         std::unordered_map<std::string, std::set<Subscriber*>> subscriber_container_;    // 保存订阅话题 name 的全部 订阅者 
