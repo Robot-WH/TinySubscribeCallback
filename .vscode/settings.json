@@ -60,6 +60,7 @@
         "set": "cpp",
         "string": "cpp",
         "string_view": "cpp",
-        "bit": "cpp"
+        "bit": "cpp",
+        "shared_mutex": "cpp"
     }
 }
