@@ -78,32 +78,50 @@ int main() {
     int value = 99; 
     /************************************************************* 一下测试全部通过 *****************************************/
     // 测试回调函数是值传递
+    std::cout << "回调函数是值传递..." << std::endl;
+    std::cout << "发送右值" << std::endl;
     util::DataDispatcher::GetInstance().Publish("int_data", 10);  // 发送右值
+    std::cout << "发送左值" << std::endl;
     util::DataDispatcher::GetInstance().Publish("int_data", value);  // 发送左值
+    std::cout << "发送引用  " << std::endl;
     util::DataDispatcher::GetInstance().Publish("int_data", read.get_value_ref());  // 发送引用  
+    std::cout << "发送常量引用" << std::endl;
     util::DataDispatcher::GetInstance().Publish("int_data", read.get_value_const_ref());  // 发送常量引用
+    std::cout << "发送右值引用" << std::endl;
     util::DataDispatcher::GetInstance().Publish("int_data", std::move(value));  // 发送右值引用
 
-    // // 测试回调函数是引用传递 
-    // util::DataDispatcher::GetInstance().Publish("test_int_ref", value);  // 发送左值   对于非高优先级非法
-    // // util::DataDispatcher::GetInstance().Publish("test_int_ref", 12);  // 发送右值    非法操作  
-    // util::DataDispatcher::GetInstance().Publish("test_int_ref", read.get_value_ref());  // 发送引用  
-    // // util::DataDispatcher::GetInstance().Publish("test_int_ref", read.get_value_const_ref());  // 发送常量引用   非法操作  
-    // // util::DataDispatcher::GetInstance().Publish("test_int_ref", std::move(value));  // 发送右值引用  非法
+    // 测试回调函数是引用传递 
+    std::cout << "回调函数是引用传递 ..." << std::endl;
+    std::cout << "发送左值" << std::endl;
+    util::DataDispatcher::GetInstance().Publish("test_int_ref", value);  // 发送左值   对于非高优先级非法
+    // util::DataDispatcher::GetInstance().Publish("test_int_ref", 12);  // 发送右值    非法操作  
+    std::cout << "发送引用  " << std::endl;
+    util::DataDispatcher::GetInstance().Publish("test_int_ref", read.get_value_ref());  // 发送引用  
+    // util::DataDispatcher::GetInstance().Publish("test_int_ref", read.get_value_const_ref());  // 发送常量引用   非法操作  
+    // util::DataDispatcher::GetInstance().Publish("test_int_ref", std::move(value));  // 发送右值引用  非法
 
     // 测试回调是常量引用
+    std::cout << "回调函数是常量引用 ..." << std::endl;
+    std::cout << "发送左值" << std::endl;
     util::DataDispatcher::GetInstance().Publish("test_const_int_ref", value);  // 发送左值
-    util::DataDispatcher::GetInstance().Publish("test_const_int_ref", 12);  // 发送右值   
+    std::cout << "发送右值" << std::endl;
+    util::DataDispatcher::GetInstance().Publish("test_const_int_ref", 12);  // 发送右值
+    std::cout << "发送引用  " << std::endl;
     util::DataDispatcher::GetInstance().Publish("test_const_int_ref", read.get_value_ref());  // 发送引用  
+    std::cout << "发送常量引用" << std::endl;
     util::DataDispatcher::GetInstance().Publish("test_const_int_ref", read.get_value_const_ref());  
+    std::cout << "发送右值引用" << std::endl;
     util::DataDispatcher::GetInstance().Publish("test_const_int_ref", std::move(value));  // 发送右值引用
 
     // // 测试回调是右值引用
+    std::cout << "回调函数是右值引用 ..." << std::endl;
     // // util::DataDispatcher::GetInstance().Publish("test_int_right_ref", value);  // 发送左值      非法
+    std::cout << "发送右值" << std::endl;
     util::DataDispatcher::GetInstance().Publish("test_int_right_ref", 17);  // 发送右值
+    std::cout << "发送右值引用" << std::endl;
     util::DataDispatcher::GetInstance().Publish("test_int_right_ref", std::move(value));  // 发送右值引用
-    // // util::DataDispatcher::GetInstance().Publish("test_int_right_ref", read.get_value_ref());  // 发送左值引用  非法
-    // // util::DataDispatcher::GetInstance().Publish("test_int_right_ref", read.get_value_const_ref());   // 发送常量左值引用  非法
+    // util::DataDispatcher::GetInstance().Publish("test_int_right_ref", read.get_value_ref());  // 发送左值引用  非法
+    // util::DataDispatcher::GetInstance().Publish("test_int_right_ref", read.get_value_const_ref());   // 发送常量左值引用  非法
     /************************************************************************************************************************/
     util::DataDispatcher::GetInstance().GetThread().join(); 
     return 1; 

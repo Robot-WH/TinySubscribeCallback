@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.0.2)
-project(aa)
+cmake_minimum_required(VERSION 3.5)
+project(wh_ipc)
 # ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 # set(CMAKE_BUILD_TYPE Debug)
@@ -12,13 +12,16 @@ set(CMAKE_BUILD_TYPE "Debug")
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS thread signals)
 
+set(WH_IPC_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include" CACHE PATH 
+    "project include location" FORCE)
+
 ###########
 ## Build ##
 ###########
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-include
+  include
 )
 
 add_executable(test_data_dispatcher

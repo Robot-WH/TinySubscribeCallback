@@ -1,8 +1,6 @@
-
 #pragma once 
 #include "TypeJudge.hpp"
-namespace util {
-
+namespace wh_ipc {
 /**
  * @brief:  BinderWrapper 基类  
  * @details:  在 function中只依赖这个基类 ， 对外的 函数为Call  设计为虚函数 供外界调用，BinderWrapperImpl 为它的子类 ，在 BinderWrapperImpl  中

@@ -1,7 +1,7 @@
 
 #pragma once 
 #include <iostream>
-namespace  util {
+namespace  wh_ipc {
 
 template<typename _T>
 class is_const {

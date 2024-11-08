@@ -1,4 +1,3 @@
-
 #pragma once 
 #include <set>
 #include <list>
@@ -12,8 +11,7 @@
 #include <type_traits>
 #include <atomic>
 #include "Function.hpp"
-namespace util {
-
+namespace wh_ipc {
 /**
  * @brief: 数据管理器对外接口类  
  * @details:  非模板的万能类  
@@ -127,7 +125,12 @@ public:
      */        
     virtual bool Callback() override {
         if (data_buffer_.empty()) return false;   
-        Call(std::move(data_buffer_.front()));  
+        // 如果回调是右值引用参数 那么需要将数据转为右值 
+        if (p_callback_wrapper_->get_ref_type() == ref_type::rvalue_ref) {
+            Call(std::move(data_buffer_.front()));  
+        } else {
+            Call(data_buffer_.front());
+        }
         DeleteFrontData();  
         return true;  
     }
@@ -187,6 +190,7 @@ private:
 class Subscriber {
 public:
     Subscriber() : data_cache_(nullptr) {}
+
     /**
      * @brief: 构造函数
      * @param callback 类内成员函数地址
@@ -194,12 +198,12 @@ public:
      * @param  cache_capacity 缓存容量  
      * @param high_priority 是否为高优先级
      */        
-    template<typename _DataT, typename _Ctype>
-    Subscriber(void (_Ctype::*callback)(_DataT), _Ctype* class_addr, int cache_capacity = 1,
+    template<typename _InputT, typename _Ctype>
+    Subscriber(void (_Ctype::*callback)(_InputT), _Ctype* class_addr, int cache_capacity = 1,
             bool high_priority = false) : high_priority_(high_priority) {
-        using pure_type = typename std::remove_const<std::remove_reference_t<_DataT>>::type; 
+        using pure_type = typename std::remove_const<std::remove_reference_t<_InputT>>::type; 
         data_cache_ = new DataManagerImpl<pure_type>(cache_capacity, 
-            new SingleParamFunction<void(_DataT)>(std::bind(callback, class_addr, std::placeholders::_1)));
+            new SingleParamFunction<void(_InputT)>(std::bind(callback, class_addr, std::placeholders::_1)));
     }
 
     /**
@@ -208,13 +212,13 @@ public:
      * @param  cache_capacity 缓存容量  
      * @param high_priority 是否为高优先级
      */      
-    template<typename _DataT>
-    Subscriber(void (*callback)(_DataT), int cache_capacity = 1,
+    template<typename _InputT>
+    Subscriber(void (*callback)(_InputT), int cache_capacity = 1,
             bool high_priority = false) : high_priority_(high_priority) {
-        using no_ref_type = std::remove_reference_t<_DataT>; 
+        using no_ref_type = std::remove_reference_t<_InputT>; 
         using pure_type = typename std::remove_const<no_ref_type>::type; 
         data_cache_ = new DataManagerImpl<pure_type>(cache_capacity, 
-            new SingleParamFunction<void(_DataT)>(callback));
+            new SingleParamFunction<void(_InputT)>(callback));
     }
 
     virtual ~Subscriber() {
@@ -243,22 +247,22 @@ private:
     void addData(_DataT&& data) {
         // 判断输入数据与数据容器的类型是否一致     const和& 不会影响  type_index的结果  
         if (data_cache_->GetDataType() != std::type_index(typeid(_DataT))) {
-            std::cerr<<"DataDispatcher addData() Type ERROR !!!"<<std::endl;
+            std::cerr<<"addData() Type error !!!"<<std::endl;
             throw std::bad_cast();  
         }
-
         using pure_type = typename std::remove_const<std::remove_reference_t<_DataT>>::type; 
         DataManagerImpl<pure_type>* data_manager_ptr =  
             dynamic_cast<DataManagerImpl<pure_type>*>(data_cache_);
 
         if (high_priority_) {
-            data_manager_ptr->Call(std::forward<_DataT>(data));  // 高优先级的直接调用 
-        } else {
+            // 高优先级的直接调用    多线程并发时，可能多个线程同时进入回调函数，那么需要用户在回调函数里自己进行加锁处理
+            data_manager_ptr->Call(std::forward<_DataT>(data));
+        } else {   // 非高优先级的将数据进行储存
             data_manager_ptr->AddData(std::forward<_DataT>(data));     // 线程安全的
         }
     }
 
-    friend class DataDispatcher; 
+    friend class IntraDataDispatcher; 
     // 数据管理 (数据缓存与回调调度)    要求能处理任何的数据，因此必须是非模板泛化基类
     DataManagerBase* data_cache_ = nullptr;  
     bool high_priority_ = false; 
@@ -268,17 +272,17 @@ private:
  * @brief: 数据调度器 
  * @details:  负责系统各种类型数据的保存，读取   
  */    
-class DataDispatcher {
+class IntraDataDispatcher {
 public:
     /**
      * @brief: 单例的创建函数  
      */            
-    static DataDispatcher& GetInstance() {
-        static DataDispatcher data_dispatcher;
+    static IntraDataDispatcher& GetInstance() {
+        static IntraDataDispatcher data_dispatcher;
         return data_dispatcher; 
     }
 
-    virtual ~DataDispatcher() {
+    virtual ~IntraDataDispatcher() {
         for (const auto& name_set : subscriber_container_) {
             for (const auto& pt : name_set.second) {
                 delete pt;  
@@ -297,9 +301,9 @@ public:
      * @param high_priority true 高优先级的订阅者在数据发布时会直接调用回调
      *                                                false 低优先级的订阅者在数据发布后由回调线程统一进行调度
      */        
-    template<typename _DataT, typename _Ctype>
+    template<typename _InputT, typename _Ctype>
     Subscriber& Subscribe(std::string const& name, 
-                                                        void (_Ctype::*callback)(_DataT), 
+                                                        void (_Ctype::*callback)(_InputT), 
                                                         _Ctype* class_addr,
                                                         int cache_capacity = 1,
                                                         bool high_priority = false) {
@@ -319,9 +323,9 @@ public:
      * @param callback 注册的回调函数
      * @param cache_capacity 缓存容量 
      */        
-    template<typename _DataT, typename _Ctype>
+    template<typename _InputT, typename _Ctype>
     Subscriber& Subscribe(std::string const& name, 
-                                                    void (*callback)(_DataT), 
+                                                    void (*callback)(_InputT), 
                                                     int cache_capacity = 1,
                                                     bool high_priority = false) {
         Subscriber* p_subscriber = new Subscriber(callback, cache_capacity, high_priority);
@@ -342,15 +346,15 @@ public:
      */            
     template<typename _T>
     void Publish(std::string const& name, _T&& data) {
-        // 如果有订阅者  则将数据传送到各个订阅者的数据缓存区
+        // 如果有订阅者  则将数据传送到各个订阅者
         std::shared_lock<std::shared_mutex> m_l(substriber_container_m_);  // 禁止subscriber_container_ 写数据
+        // std::cout << "Publish, name: " << name << ", size: " << subscriber_container_[name].size() << "\n";
         if (subscriber_container_[name].size()) {
             ///////////////////////////////////////////////////
-            data_m_.lock();  
-            for (const auto& pt : subscriber_container_[name]) {
-                pt->addData(std::forward<_T>(data));     // addData是线程安全的
+            // 遍历该topic的所有订阅者，并将数据发送给他们
+            for (const auto& subscriber : subscriber_container_[name]) {
+                subscriber->addData(std::forward<_T>(data));     // addData是线程安全的
             }
-            data_m_.unlock();
             ///////////////////////////////////////////////////
             m_l.unlock();     // = unlock_shared(), 可以对 subscriber_container_ 进行更新了
             ///////////////////////////////////////////////////
@@ -372,11 +376,11 @@ public:
     }
 
 protected:
-    DataDispatcher() {
-        callback_thread_ = std::thread(&DataDispatcher::process, this);
+    IntraDataDispatcher() {
+        callback_thread_ = std::thread(&IntraDataDispatcher::process, this);
     }
-    DataDispatcher(DataDispatcher const& object) = default;
-    DataDispatcher(DataDispatcher&& object) = default; 
+    IntraDataDispatcher(IntraDataDispatcher const& object) = default;
+    IntraDataDispatcher(IntraDataDispatcher&& object) = default; 
 
     // 处理线程   
     void process() {
